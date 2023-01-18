@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import joi from 'joi';
+import Joi from 'joi';
 import {MongoClient} from 'mongodb'
 
 
@@ -20,9 +20,38 @@ try {
     await mongoClient.connect();
     db = mongoClient.db();
 } catch (err) {
-    console.log("Não foi possível conectar com o banco de dados.");
+    console.log("Connection with database failed.");
     console.log(err);
 }
 
+const signUpSchema = Joi.object({
+    name: Joi.string().required(),
+    email: Joi.string().email().required(),
+    password: Joi.string().pattern(new RegExp('^[a-zA-Z0-9]{8,20}$')),
+    repeatPassword: Joi.ref('password')
+});
 
-app.listen(PORT, () => console.log(`O servidor iniciou com sucesso na PORT: ${PORT}`));
+
+app.post("/cadastro", async (req,res) => {
+    const {name,email,password,repeatPassword} = req.body; // {name, email, password, repeatPassword}
+
+    const {error} = signUpSchema.validate({name,email,password,repeatPassword},{abortEarly: false});
+    if(error) {
+        const AllErrors = error.details.map((e) => e.message);
+        return res.status(422).send(AllErrors);
+    }
+
+    try{
+        const emailExist = await db.collection("users").findOne({email});
+        if(emailExist) return res.status(409).send("Email already registered.");
+
+        await db.collection("users").insertOne({name, email, password});
+
+        res.send("OK");
+    } catch(err){
+        console.error(err);
+        return res.status(500).send("Database error.")
+    }
+})
+
+app.listen(PORT, () => console.log(`The app starts on PORT: ${PORT}`));
