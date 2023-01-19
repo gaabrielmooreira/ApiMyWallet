@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import Joi from 'joi';
 import {MongoClient} from 'mongodb'
+import bcrypt from 'bcrypt'
 
 
 dotenv.config();
@@ -31,9 +32,14 @@ const signUpSchema = Joi.object({
     repeatPassword: Joi.ref('password')
 });
 
+// const signInSchema = Joi.object({
+//     email: Joi.string().email().required(),
+//     password: Joi.string().pattern(new RegExp('^[a-zA-Z0-9]{8,20}$'))
+// })
+
 
 app.post("/cadastro", async (req,res) => {
-    const {name,email,password,repeatPassword} = req.body; // {name, email, password, repeatPassword}
+    const {name,email,password,repeatPassword} = req.body; 
 
     const {error} = signUpSchema.validate({name,email,password,repeatPassword},{abortEarly: false});
     if(error) {
@@ -43,15 +49,26 @@ app.post("/cadastro", async (req,res) => {
 
     try{
         const emailExist = await db.collection("users").findOne({email});
-        if(emailExist) return res.status(409).send("Email already registered.");
+        if(emailExist) return res.send("Email is already in use.");
 
-        await db.collection("users").insertOne({name, email, password});
+        const hashPassword = bcrypt.hashSync(password);
 
-        res.send("OK");
+        await db.collection("users").insertOne({name, email, hashPassword});
+
+        res.send("Thank you for registering.");
     } catch(err){
         console.error(err);
         return res.status(500).send("Database error.")
     }
 })
+
+// app.post("/", async (req,res) => {
+//     const {email, password} = req.body;
+ 
+//     const {error} = signInSchema.validate({email,password},{abortEarly:false});
+//     if(error) return res.status(422).send("Email e/ou senha incorreto(s).");
+
+
+// })
 
 app.listen(PORT, () => console.log(`The app starts on PORT: ${PORT}`));
