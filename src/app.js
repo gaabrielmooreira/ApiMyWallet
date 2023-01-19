@@ -52,7 +52,7 @@ app.post("/cadastro", async (req,res) => {
         const emailExist = await db.collection("users").findOne({email});
         if(emailExist) return res.send("Email is already in use.");
 
-        const hashPassword = bcrypt.hashSync(password);
+        const hashPassword = bcrypt.hashSync(password,10);
         await db.collection("users").insertOne({name, email, hashPassword});
 
         res.send("Thank you for registering.");
