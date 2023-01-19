@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import Joi from 'joi';
 import {MongoClient} from 'mongodb'
 import bcrypt from 'bcrypt'
+import {v4 as uuid} from 'uuid';
 
 
 dotenv.config();
@@ -32,10 +33,10 @@ const signUpSchema = Joi.object({
     repeatPassword: Joi.ref('password')
 });
 
-// const signInSchema = Joi.object({
-//     email: Joi.string().email().required(),
-//     password: Joi.string().pattern(new RegExp('^[a-zA-Z0-9]{8,20}$'))
-// })
+const signInSchema = Joi.object({
+    email: Joi.string().email().required(),
+    password: Joi.string().pattern(new RegExp('^[a-zA-Z0-9]{8,20}$'))
+})
 
 
 app.post("/cadastro", async (req,res) => {
@@ -52,7 +53,6 @@ app.post("/cadastro", async (req,res) => {
         if(emailExist) return res.send("Email is already in use.");
 
         const hashPassword = bcrypt.hashSync(password);
-
         await db.collection("users").insertOne({name, email, hashPassword});
 
         res.send("Thank you for registering.");
@@ -62,13 +62,29 @@ app.post("/cadastro", async (req,res) => {
     }
 })
 
-// app.post("/", async (req,res) => {
-//     const {email, password} = req.body;
+app.post("/", async (req,res) => {
+    const {email, password} = req.body;
  
-//     const {error} = signInSchema.validate({email,password},{abortEarly:false});
-//     if(error) return res.status(422).send("Email e/ou senha incorreto(s).");
+    const {error} = signInSchema.validate({email,password},{abortEarly:false});
+    if(error) return res.status(422).send("Email e/ou senha inválido(s).");
+    try{
+        const checkUser = await db.collection("users").find({email});
+        const checkPassword = bcrypt.compareSync(password, checkUser.password);
 
+        if(checkUser && checkPassword){
+            const token = uuid();
+            
+            await db.collection("sessions").insertOne({_id: checkUser._id, token, tokenExpeditionDate: Date.now()});
+            
+            return res.send(token);
+        } else{
+            return res.status(409).send("Email e/ou senha incorreto(s).");
+        }
 
-// })
+    } catch (err){
+        console.error(err);
+        return res.status(500).send("Database error.")
+    }    
+})
 
 app.listen(PORT, () => console.log(`The app starts on PORT: ${PORT}`));
