@@ -2,9 +2,9 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import Joi from 'joi';
-import {MongoClient} from 'mongodb'
+import { MongoClient } from 'mongodb'
 import bcrypt from 'bcrypt'
-import {v4 as uuid} from 'uuid';
+import { v4 as uuid } from 'uuid';
 
 
 dotenv.config();
@@ -38,53 +38,97 @@ const signInSchema = Joi.object({
     password: Joi.string().pattern(new RegExp('^[a-zA-Z0-9]{8,20}$'))
 })
 
+const transferSchema = Joi.object({
+    value: Joi.number().required(),
+    descripition: Joi.string().required(),
+})
 
-app.post("/cadastro", async (req,res) => {
-    const {name,email,password,repeatPassword} = req.body; 
+app.post("/cadastro", async (req, res) => {
+    const { name, email, password, repeatPassword } = req.body;
 
-    const {error} = signUpSchema.validate({name,email,password,repeatPassword},{abortEarly: false});
-    if(error) {
+    const { error } = signUpSchema.validate({ name, email, password, repeatPassword }, { abortEarly: false });
+    if (error) {
         const AllErrors = error.details.map((e) => e.message);
         return res.status(422).send(AllErrors);
     }
 
-    try{
-        const emailExist = await db.collection("users").findOne({email});
-        if(emailExist) return res.send("Email is already in use.");
+    try {
+        const emailExist = await db.collection("users").findOne({ email });
+        if (emailExist) return res.send("Email is already in use.");
 
-        const hashPassword = bcrypt.hashSync(password,10);
-        await db.collection("users").insertOne({name, email, hashPassword});
+        const hashPassword = bcrypt.hashSync(password, 10);
+        await db.collection("users").insertOne({ name, email, hashPassword });
 
         res.send("Thank you for registering.");
-    } catch(err){
+    } catch (err) {
         console.error(err);
         return res.status(500).send("Database error.")
     }
 })
 
-app.post("/", async (req,res) => {
-    const {email, password} = req.body;
- 
-    const {error} = signInSchema.validate({email,password},{abortEarly:false});
-    if(error) return res.status(422).send("Email e/ou senha inválido(s).");
-    try{
-        const checkUser = await db.collection("users").find({email});
+app.post("/", async (req, res) => {
+    const { email, password } = req.body;
+
+    const { error } = signInSchema.validate({ email, password }, { abortEarly: false });
+    if (error) return res.status(422).send("Invalid's email and/or password.");
+    try {
+        const user = await db.collection("users").findOne({ email });
         const checkPassword = bcrypt.compareSync(password, checkUser.password);
 
-        if(checkUser && checkPassword){
+        if (user && checkPassword) {
             const token = uuid();
-            
-            await db.collection("sessions").insertOne({_id: checkUser._id, token, tokenExpeditionDate: Date.now()});
-            
+
+            await db.collection("sessions").insertOne({ _id: user._id, token, tokenExpeditionDate: Date.now() });
+
             return res.send(token);
-        } else{
-            return res.status(409).send("Email e/ou senha incorreto(s).");
+        } else {
+            return res.status(409).send("Invalid's email and/or password.");
         }
 
-    } catch (err){
+    } catch (err) {
         console.error(err);
         return res.status(500).send("Database error.")
-    }    
+    }
+})
+
+// app.get("/", async (req, res) => {
+//     const { authorization } = req.headers;
+
+//     const token = authorization?.replace("Bearer ", "");
+//     if (!token) return res.sendStatus(401);
+
+//     try {
+//         const session = await db.collection("sessions").findOne({ token });
+
+//     } catch (err) {
+//         console.error(err);
+//         return res.status(500).send("Database error.");
+//     }
+
+// })
+
+app.post("/nova-entrada", async (req, res) => {
+    const { authorization } = req.headers;
+    const token = authorization?.replace("Bearer ", "");
+    if (!token) return res.sendStatus(401);
+
+    const { value, descripition } = req.body;
+    
+    const { error } = transferSchema.validate({ value, descripition}, { abortEarly: false });
+    if(error) return res.status(422).send("Invalid data(s).");
+
+    const entryTransfer = {value, descripition, type: 'entry'};
+    
+    try {
+        const session = await db.collection("sessions").findOne({token});
+
+        await db.collection("transfers").insertOne({ _id: session._id, ...entryTransfer});
+
+        res.status(201).send("New entry registered.");
+    } catch(err){
+        console.error(err);
+        return res.status(500).send("Database error.")
+    }
 })
 
 app.listen(PORT, () => console.log(`The app starts on PORT: ${PORT}`));
