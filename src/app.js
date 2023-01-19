@@ -121,6 +121,7 @@ app.post("/nova-entrada", async (req, res) => {
 
     try {
         const session = await db.collection("sessions").findOne({token});
+        if(!session) return res.status(401).send("You are not logged in.");
 
         await db.collection("transfers").insertOne({ userId: session._id, ...entryTransfer});
 
@@ -128,6 +129,30 @@ app.post("/nova-entrada", async (req, res) => {
     } catch(err){
         console.error(err);
         return res.status(500).send("Database error.")
+    }
+})
+
+app.post("/nova-saida", async (req,res) => {
+    const { authorization } = req.headers;
+    const token = authorization?.replace("Bearer ", "");
+    if (!token) return res.sendStatus(401);
+    
+    const {value, descripition} = req.body;
+    const valueNumber = Number(value.replace(",","."));
+    const {error} = transferSchema.validate({value: valueNumber, descripition}, {abortEarly:false});
+    if (error) return res.send(422).send("Invalid data(s).");
+    
+    const exitTransfer = {value: valueNumber,descripition, type: "exit"};
+    try{
+        const session = await db.collection("sessions").findOne({token});
+        if(!session) return res.status(401).send("You are not logged in.");
+
+        await db.collection("transfers").insertOne({userId: session._id,...exitTransfer});
+
+        res.status(201).send("New exit registered.");
+    } catch(err){
+        console.error(err);
+        return res.status(500).send("Database error.");
     }
 })
 
