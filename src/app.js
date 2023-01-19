@@ -30,7 +30,7 @@ const signUpSchema = Joi.object({
     name: Joi.string().required(),
     email: Joi.string().email().required(),
     password: Joi.string().pattern(new RegExp('^[a-zA-Z0-9]{8,20}$')),
-    repeatPassword: Joi.ref('password')
+    confirmPassword: Joi.ref('password')
 });
 
 const signInSchema = Joi.object({
@@ -44,9 +44,9 @@ const transferSchema = Joi.object({
 })
 
 app.post("/cadastro", async (req, res) => {
-    const { name, email, password, repeatPassword } = req.body;
+    const { name, email, password, confirmPassword } = req.body;
 
-    const { error } = signUpSchema.validate({ name, email, password, repeatPassword }, { abortEarly: false });
+    const { error } = signUpSchema.validate({ name, email, password, confirmPassword }, { abortEarly: false });
     if (error) {
         const AllErrors = error.details.map((e) => e.message);
         return res.status(422).send(AllErrors);
@@ -57,7 +57,7 @@ app.post("/cadastro", async (req, res) => {
         if (emailExist) return res.send("Email is already in use.");
 
         const hashPassword = bcrypt.hashSync(password, 10);
-        await db.collection("users").insertOne({ name, email, hashPassword });
+        await db.collection("users").insertOne({ name, email, password: hashPassword });
 
         res.send("Thank you for registering.");
     } catch (err) {
@@ -73,7 +73,7 @@ app.post("/", async (req, res) => {
     if (error) return res.status(422).send("Invalid's email and/or password.");
     try {
         const user = await db.collection("users").findOne({ email });
-        const checkPassword = bcrypt.compareSync(password, checkUser.password);
+        const checkPassword = bcrypt.compareSync(password, user.password);
 
         if (user && checkPassword) {
             const token = uuid();
@@ -113,16 +113,16 @@ app.post("/nova-entrada", async (req, res) => {
     if (!token) return res.sendStatus(401);
 
     const { value, descripition } = req.body;
-    
-    const { error } = transferSchema.validate({ value, descripition}, { abortEarly: false });
+    const valueNumber = Number(value.replace(",","."))
+    const { error } = transferSchema.validate({ value: valueNumber, descripition}, { abortEarly: false });
     if(error) return res.status(422).send("Invalid data(s).");
 
-    const entryTransfer = {value, descripition, type: 'entry'};
-    
+    const entryTransfer = {value: valueNumber, descripition, type: 'entry'};
+
     try {
         const session = await db.collection("sessions").findOne({token});
 
-        await db.collection("transfers").insertOne({ _id: session._id, ...entryTransfer});
+        await db.collection("transfers").insertOne({ userId: session._id, ...entryTransfer});
 
         res.status(201).send("New entry registered.");
     } catch(err){
