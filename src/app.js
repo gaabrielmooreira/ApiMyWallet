@@ -78,7 +78,7 @@ app.post("/", async (req, res) => {
         if (user && checkPassword) {
             const token = uuid();
 
-            await db.collection("sessions").insertOne({ _id: user._id, token, tokenExpeditionDate: Date.now() });
+            await db.collection("sessions").insertOne({ userId: user._id, token, tokenExpeditionDate: Date.now() });
 
             return res.send(token);
         } else {
@@ -90,22 +90,6 @@ app.post("/", async (req, res) => {
         return res.status(500).send("Database error.")
     }
 })
-
-// app.get("/", async (req, res) => {
-//     const { authorization } = req.headers;
-
-//     const token = authorization?.replace("Bearer ", "");
-//     if (!token) return res.sendStatus(401);
-
-//     try {
-//         const session = await db.collection("sessions").findOne({ token });
-
-//     } catch (err) {
-//         console.error(err);
-//         return res.status(500).send("Database error.");
-//     }
-
-// })
 
 app.post("/nova-entrada", async (req, res) => {
     const { authorization } = req.headers;
@@ -123,7 +107,7 @@ app.post("/nova-entrada", async (req, res) => {
         const session = await db.collection("sessions").findOne({token});
         if(!session) return res.status(401).send("You are not logged in.");
 
-        await db.collection("transfers").insertOne({ userId: session._id, ...entryTransfer});
+        await db.collection("transfers").insertOne({ userId: session.userId, ...entryTransfer});
 
         res.status(201).send("New entry registered.");
     } catch(err){
@@ -147,13 +131,38 @@ app.post("/nova-saida", async (req,res) => {
         const session = await db.collection("sessions").findOne({token});
         if(!session) return res.status(401).send("You are not logged in.");
 
-        await db.collection("transfers").insertOne({userId: session._id,...exitTransfer});
+        await db.collection("transfers").insertOne({userId: session.userId,...exitTransfer});
 
         res.status(201).send("New exit registered.");
     } catch(err){
         console.error(err);
         return res.status(500).send("Database error.");
     }
+})
+
+app.get("/home", async (req, res) => {
+    const { authorization } = req.headers;
+    const token = authorization?.replace("Bearer ", "");
+    if (!token) return res.sendStatus(401);
+
+    try {
+        const session = await db.collection("sessions").findOne({ token });
+        if(!session) return res.sendStatus(401);
+        const userTransfers = await db.collection("transfers").find({userId: session.userId}).toArray();
+        let saldo = 0;
+        userTransfers.forEach(transfer => { 
+            if(transfer.type === "entry"){
+                saldo += transfer.value;
+            } else {
+                saldo -= transfer.value;
+            }
+        }); 
+        res.send({userTransfers,saldo});
+    } catch (err) {
+        console.error(err);
+        return res.status(500).send("Database error.");
+    }
+
 })
 
 app.listen(PORT, () => console.log(`The app starts on PORT: ${PORT}`));
