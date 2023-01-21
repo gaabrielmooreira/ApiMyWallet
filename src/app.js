@@ -40,7 +40,7 @@ const signInSchema = Joi.object({
 
 const transferSchema = Joi.object({
     value: Joi.number().required(),
-    descripition: Joi.string().required(),
+    description: Joi.string().required(),
 })
 
 app.post("/cadastro", async (req, res) => {
@@ -54,7 +54,7 @@ app.post("/cadastro", async (req, res) => {
 
     try {
         const emailExist = await db.collection("users").findOne({ email });
-        if (emailExist) return res.send("Email is already in use.");
+        if (emailExist) return res.status(409).send("Email is already in use.");
 
         const hashPassword = bcrypt.hashSync(password, 10);
         await db.collection("users").insertOne({ name, email, password: hashPassword });
@@ -96,45 +96,45 @@ app.post("/nova-entrada", async (req, res) => {
     const token = authorization?.replace("Bearer ", "");
     if (!token) return res.sendStatus(401);
 
-    const { value, descripition } = req.body;
-    const valueNumber = Number(value.replace(",","."))
-    const { error } = transferSchema.validate({ value: valueNumber, descripition}, { abortEarly: false });
-    if(error) return res.status(422).send("Invalid data(s).");
+    const { value, description } = req.body;
+    const valueNumber = Number(value.replace(",", "."));
+    const { error } = transferSchema.validate({ value: valueNumber, description }, { abortEarly: false });
+    if (error) return res.status(422).send("Invalid data(s).");
 
-    const entryTransfer = {value: valueNumber, descripition, type: 'entry'};
+    const entryTransfer = { value: valueNumber, description, type: 'entry' };
 
     try {
-        const session = await db.collection("sessions").findOne({token});
-        if(!session) return res.status(401).send("You are not logged in.");
+        const session = await db.collection("sessions").findOne({ token });
+        if (!session) return res.status(401).send("You are not logged in.");
 
-        await db.collection("transfers").insertOne({ userId: session.userId, ...entryTransfer});
+        await db.collection("transfers").insertOne({ userId: session.userId, ...entryTransfer });
 
         res.status(201).send("New entry registered.");
-    } catch(err){
+    } catch (err) {
         console.error(err);
         return res.status(500).send("Database error.")
     }
 })
 
-app.post("/nova-saida", async (req,res) => {
+app.post("/nova-saida", async (req, res) => {
     const { authorization } = req.headers;
     const token = authorization?.replace("Bearer ", "");
     if (!token) return res.sendStatus(401);
-    
-    const {value, descripition} = req.body;
-    const valueNumber = Number(value.replace(",","."));
-    const {error} = transferSchema.validate({value: valueNumber, descripition}, {abortEarly:false});
-    if (error) return res.send(422).send("Invalid data(s).");
-    
-    const exitTransfer = {value: valueNumber,descripition, type: "exit"};
-    try{
-        const session = await db.collection("sessions").findOne({token});
-        if(!session) return res.status(401).send("You are not logged in.");
 
-        await db.collection("transfers").insertOne({userId: session.userId,...exitTransfer});
+    const { value, description } = req.body;
+    const valueNumber = Number(value.replace(",", "."));
+    const { error } = transferSchema.validate({ value: valueNumber, description }, { abortEarly: false });
+    if (error) return res.send(422).send("Invalid data(s).");
+
+    const exitTransfer = { value: valueNumber, description, type: "exit" };
+    try {
+        const session = await db.collection("sessions").findOne({ token });
+        if (!session) return res.status(401).send("You are not logged in.");
+
+        await db.collection("transfers").insertOne({ userId: session.userId, ...exitTransfer });
 
         res.status(201).send("New exit registered.");
-    } catch(err){
+    } catch (err) {
         console.error(err);
         return res.status(500).send("Database error.");
     }
@@ -147,17 +147,18 @@ app.get("/home", async (req, res) => {
 
     try {
         const session = await db.collection("sessions").findOne({ token });
-        if(!session) return res.sendStatus(401);
-        const userTransfers = await db.collection("transfers").find({userId: session.userId}).toArray();
+        if (!session) return res.sendStatus(401);
+        const userTransfers = await db.collection("transfers").find({ userId: session.userId }).toArray();
         let saldo = 0;
-        userTransfers.forEach(transfer => { 
-            if(transfer.type === "entry"){
-                saldo += transfer.value;
+        userTransfers.forEach(transfer => {
+            if (transfer.type === "entry") {
+                saldo += Number(transfer.value);
             } else {
-                saldo -= transfer.value;
+                saldo -= Number(transfer.value);
             }
-        }); 
-        res.send({userTransfers,saldo});
+        });
+        const { name } = await db.collection("users").findOne({ _id: session.userId });
+        res.send({ name, userTransfers, saldo });
     } catch (err) {
         console.error(err);
         return res.status(500).send("Database error.");
