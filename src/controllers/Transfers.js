@@ -1,5 +1,6 @@
 import db from '../config/database.js'
 import dayjs from 'dayjs';
+import { ObjectId } from 'mongodb';
 
 export const newTransfer = async (req, res) => {
     const { value, description, type } = req.body;
@@ -35,4 +36,16 @@ export const getUserTransfers = async (_, res) => {
         return res.status(500).send("Database error.");
     }
 
+}
+
+export const deleteUserTransfer = async (req,res) => {
+    const {transferId} = req.params;
+
+    try{
+        await db.collection("transfers").deleteOne({ _id: ObjectId(transferId)});
+        res.status(202).send("OK");
+    } catch(err){
+        console.error(err);
+        return res.status(500).send("Database error.");
+    }
 }
