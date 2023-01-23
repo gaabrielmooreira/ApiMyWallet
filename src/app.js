@@ -5,6 +5,7 @@ import Joi from 'joi';
 import { MongoClient } from 'mongodb'
 import bcrypt from 'bcrypt'
 import { v4 as uuid } from 'uuid';
+import dayjs from 'dayjs';
 
 
 dotenv.config();
@@ -101,7 +102,7 @@ app.post("/nova-entrada", async (req, res) => {
     const { error } = transferSchema.validate({ value: valueNumber, description }, { abortEarly: false });
     if (error) return res.status(422).send("Invalid data(s).");
 
-    const entryTransfer = { value: valueNumber, description, type: 'entry' };
+    const entryTransfer = { value: valueNumber, description, type: 'entry', date: dayjs().format('DD/MM')};
 
     try {
         const session = await db.collection("sessions").findOne({ token });
@@ -126,7 +127,7 @@ app.post("/nova-saida", async (req, res) => {
     const { error } = transferSchema.validate({ value: valueNumber, description }, { abortEarly: false });
     if (error) return res.send(422).send("Invalid data(s).");
 
-    const exitTransfer = { value: valueNumber, description, type: "exit" };
+    const exitTransfer = { value: valueNumber, description, type: "exit", date: dayjs().format('DD/MM')};
     try {
         const session = await db.collection("sessions").findOne({ token });
         if (!session) return res.status(401).send("You are not logged in.");
