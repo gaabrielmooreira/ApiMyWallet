@@ -1,19 +1,12 @@
 import db from '../config/database.js'
 import dayjs from 'dayjs';
 
-
 export const newTransfer = async (req, res) => {
-    const { authorization } = req.headers;
-    const token = authorization?.replace("Bearer ", "");
-    if (!token) return res.sendStatus(401);
-
     const { value, description, type } = req.body;
     const transfer = { value, description, type, date: dayjs().format('DD/MM')};
-
+    const session = res.locals.session;
+    
     try {
-        const session = await db.collection("sessions").findOne({ token });
-        if (!session) return res.status(401).send("You are not logged in.");
-
         await db.collection("transfers").insertOne({ userId: session.userId, ...transfer });
 
         res.status(201).send("New transfer registered.");
@@ -23,14 +16,9 @@ export const newTransfer = async (req, res) => {
     }
 }
 
-export const getUserTransfers = async (req, res) => {
-    const { authorization } = req.headers;
-    const token = authorization?.replace("Bearer ", "");
-    if (!token) return res.sendStatus(401);
-
+export const getUserTransfers = async (_, res) => {
+    const session = res.locals.session;
     try {
-        const session = await db.collection("sessions").findOne({ token });
-        if (!session) return res.sendStatus(401);
         const userTransfers = await db.collection("transfers").find({ userId: session.userId }).toArray();
         let saldo = 0;
         userTransfers.forEach(transfer => {
